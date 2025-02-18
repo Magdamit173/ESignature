@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Signature Pad</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+            background-color: transparent;
+            border: 2px solid #000;
+            border-radius: 5px;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        button, input {
+            padding: 10px;
+            font-size: 14px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        input[type="color"], input[type="range"], input[type="number"], input[type="checkbox"] {
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Signature Pad</h2>
+
+        <canvas id="signatureCanvas"></canvas>
+
+        <div class="controls">
+            <label>Pen Color: <input type="color" id="penColor"></label>
+            <label>Thickness: <input type="range" id="penThickness" min="1" max="10" value="2"></label>
+            <label>Width: <input type="number" id="canvasWidth" min="100" max="1000" value="500"></label>
+            <label>Height: <input type="number" id="canvasHeight" min="100" max="500" value="300"></label>
+            <label>Enable Tails: <input type="checkbox" id="enableTails" checked></label>
+            <label>Transparent Background: <input type="checkbox" id="transparentBackground"></label>
+            <button id="resizeCanvas">Resize</button>
+            <button id="undoButton">Undo (Ctrl + Z)</button>
+            <button id="redoButton">Redo (Ctrl + Y / Ctrl + Shift + Z)</button>
+            <button id="clearButton">Clear</button>
+            <button id="downloadButton">Download (Ctrl + S)</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("signatureCanvas");
+        const ctx = canvas.getContext("2d");
+
+        let drawing = false;
+        let strokes = [];
+        let undoneStrokes = [];
+
+        function initCanvas(width = 500, height = 300) {
+            const isTransparent = document.getElementById("transparentBackground").checked;
+            canvas.width = width;
+            canvas.height = height;
+            if (isTransparent) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = "white";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            ctx.lineCap = "round";
+            setPenSettings();
+        }
+
+        function setPenSettings() {
+            ctx.strokeStyle = document.getElementById("penColor").value;
+            ctx.lineWidth = document.getElementById("penThickness").value;
+        }
+
+        function getMousePos(event) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (event.clientX - rect.left) * (canvas.width / rect.width),
+                y: (event.clientY - rect.top) * (canvas.height / rect.height)
+            };
+        }
+
+        canvas.addEventListener("mousedown", (e) => {
+            drawing = true;
+            const { x, y } = getMousePos(e);
+            strokes.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+            undoneStrokes = [];
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        });
+
+        canvas.addEventListener("mousemove", (e) => {
+            if (!drawing) return;
+            const { x, y } = getMousePos(e);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            if (!document.getElementById("enableTails").checked) {
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+            }
+        });
+
+        canvas.addEventListener("mouseup", () => drawing = false);
+
+        document.getElementById("penColor").addEventListener("input", setPenSettings);
+        document.getElementById("penThickness").addEventListener("input", setPenSettings);
+
+        document.getElementById("clearButton").addEventListener("click", () => {
+            strokes = [];
+            undoneStrokes = [];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            initCanvas(canvas.width, canvas.height);
+        });
+
+        document.getElementById("resizeCanvas").addEventListener("click", () => {
+            const width = document.getElementById("canvasWidth").value;
+            const height = document.getElementById("canvasHeight").value;
+            initCanvas(width, height);
+        });
+
+        document.getElementById("undoButton").addEventListener("click", undo);
+        document.getElementById("redoButton").addEventListener("click", redo);
+
+        function undo() {
+            if (strokes.length > 0) {
+                undoneStrokes.push(strokes.pop());
+                if (strokes.length > 0) {
+                    ctx.putImageData(strokes[strokes.length - 1], 0, 0);
+                } else {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    initCanvas(canvas.width, canvas.height);
+                }
+            }
+        }
+
+        function redo() {
+            if (undoneStrokes.length > 0) {
+                strokes.push(undoneStrokes.pop());
+                ctx.putImageData(strokes[strokes.length - 1], 0, 0);
+            }
+        }
+
+        // Download as PNG
+        function downloadPNG() {
+            const link = document.createElement("a");
+            const isTransparent = document.getElementById("transparentBackground").checked;
+            link.download = isTransparent ? "signature-transparent.png" : "signature.png";
+
+            if (isTransparent) {
+                const tempCanvas = document.createElement("canvas");
+                const tempCtx = tempCanvas.getContext("2d");
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+
+                // Clear the background (make it transparent)
+                tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+                // Draw the signature from the original canvas onto the temporary canvas
+                tempCtx.drawImage(canvas, 0, 0);
+
+                // Set the link's href to the temporary canvas data URL
+                link.href = tempCanvas.toDataURL("image/png");
+            } else {
+                link.href = canvas.toDataURL("image/png");
+            }
+
+            link.click();
+        }
+
+        document.getElementById("downloadButton").addEventListener("click", () => {
+            downloadPNG();
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener("keydown", (e) => {
+            if (e.ctrlKey && e.key === "z") { // Ctrl + Z (Undo)
+                undo();
+                e.preventDefault();
+            }
+            if (e.ctrlKey && (e.key === "y" || (e.shiftKey && e.key === "z"))) { // Ctrl + Y or Ctrl + Shift + Z (Redo)
+                redo();
+                e.preventDefault();
+            }
+            if (e.ctrlKey && e.key === "s") { // Ctrl + S (Save)
+                downloadPNG();
+                e.preventDefault();
+            }
+        });
+
+        // Make the canvas responsive
+        function resizeCanvas() {
+            const tempImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            ctx.putImageData(tempImage, 0, 0);
+        }
+
+        window.addEventListener("resize", resizeCanvas);
+
+        // Initialize canvas with default dimensions
+        initCanvas();
+
+        // Ensure canvas is initialized correctly based on transparency setting
+        document.getElementById("transparentBackground").addEventListener("change", () => {
+            const width = canvas.width;
+            const height = canvas.height;
+            initCanvas(width, height);
+        });
+    </script>
+</body>
+</html>
