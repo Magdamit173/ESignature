@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -39,7 +40,8 @@
             margin-top: 10px;
         }
 
-        button, input {
+        button,
+        input {
             padding: 10px;
             font-size: 14px;
             border: none;
@@ -56,18 +58,22 @@
             background-color: #0056b3;
         }
 
-        input[type="color"], input[type="range"], input[type="number"], input[type="checkbox"] {
+        input[type="color"],
+        input[type="range"],
+        input[type="number"],
+        input[type="checkbox"] {
             cursor: pointer;
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h2>Signature Pad</h2>
 
         <canvas id="signatureCanvas"></canvas>
 
-        <div class="controls">
+        <div class="controls" id="controls">
             <label>Pen Color: <input type="color" id="penColor"></label>
             <label>Thickness: <input type="range" id="penThickness" min="1" max="10" value="2"></label>
             <label>Width: <input type="number" id="canvasWidth" min="100" max="1000" value="500"></label>
@@ -117,6 +123,14 @@
             };
         }
 
+        function getTouchPos(touchEvent) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (touchEvent.touches[0].clientX - rect.left) * (canvas.width / rect.width),
+                y: (touchEvent.touches[0].clientY - rect.top) * (canvas.height / rect.height)
+            };
+        }
+
         canvas.addEventListener("mousedown", (e) => {
             drawing = true;
             const { x, y } = getMousePos(e);
@@ -138,6 +152,31 @@
         });
 
         canvas.addEventListener("mouseup", () => drawing = false);
+
+        // Touch event listeners
+        canvas.addEventListener("touchstart", (e) => {
+            e.preventDefault();
+            drawing = true;
+            const { x, y } = getTouchPos(e);
+            strokes.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+            undoneStrokes = [];
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        });
+
+        canvas.addEventListener("touchmove", (e) => {
+            e.preventDefault();
+            if (!drawing) return;
+            const { x, y } = getTouchPos(e);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            if (!document.getElementById("enableTails").checked) {
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+            }
+        });
+
+        canvas.addEventListener("touchend", () => drawing = false);
 
         document.getElementById("penColor").addEventListener("input", setPenSettings);
         document.getElementById("penThickness").addEventListener("input", setPenSettings);
@@ -220,29 +259,25 @@
             }
             if (e.ctrlKey && e.key === "s") { // Ctrl + S (Save)
                 downloadPNG();
-                e.preventDefault();
+                e.prevent
             }
         });
 
-        // Make the canvas responsive
-        function resizeCanvas() {
-            const tempImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
-            ctx.putImageData(tempImage, 0, 0);
-        }
+        // Device detection
+        function isAndroid() { return /Android/i.test(navigator.userAgent); }
+
+        function adjustForDevice() { if (isAndroid()) { document.getElementById("undoButton").style.display = "none"; document.getElementById("redoButton").style.display = "none"; document.getElementById("downloadButton").style.display = "none"; document.getElementById("resizeCanvas").style.display = "none"; } }
 
         window.addEventListener("resize", resizeCanvas);
 
-        // Initialize canvas with default dimensions
+        // Initialize canvas with default dimensions 
         initCanvas();
 
-        // Ensure canvas is initialized correctly based on transparency setting
-        document.getElementById("transparentBackground").addEventListener("change", () => {
-            const width = canvas.width;
-            const height = canvas.height;
-            initCanvas(width, height);
-        });
-    </script>
+        // Ensure canvas is initialized correctly based on transparency setting 
+        document.getElementById("transparentBackground").addEventListener("change", () => { const width = canvas.width; const height = canvas.height; initCanvas(width, height); });
+
+        // Adjust interface for the detected device 
+        adjustForDevice(); </script>
 </body>
+
 </html>
